@@ -13,26 +13,28 @@ import xgboost as xgb
 import lightgbm as lgb
 import tensorflow as tf
 
-# Set wide layout and custom title
-st.set_page_config(layout="wide", page_title="Dopamine ML Model App")
-st.markdown("<h1 style='text-align: center;'>🧠 Machine Learning for Dopamine Detection</h1>", unsafe_allow_html=True)
+# === PAGE SETUP ===
+st.set_page_config(layout="wide", page_title="Ahmet Selim Taşaltın's Comparative Engine")
+st.markdown("<h1 style='text-align: center;'>⚙️ Ahmet Selim Taşaltın's Comparative Engine</h1>", unsafe_allow_html=True)
 
+# === UPLOAD CSV ===
 uploaded_file = st.file_uploader("Upload your CSV file with features and target", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
     feature_options = list(df.columns)
-    target = st.selectbox("🎯 Select your target column (e.g., Dopamine_Concentration)", feature_options)
+    target = st.selectbox("🎯 Select your target variable", feature_options)
     feature_options.remove(target)
-    selected_features = st.multiselect("🧪 Select feature columns", feature_options, default=feature_options[:3])
+    selected_features = st.multiselect("🧪 Select input features", feature_options, default=feature_options[:3])
 
-    if st.button("🚀 Run Machine Learning Pipeline"):
+    if st.button("🚀 Run Comparative Models"):
         X = df[selected_features].values
         y = df[target].values
         scaler = MinMaxScaler()
         X_scaled = scaler.fit_transform(X)
 
+        # === MODELS ===
         models = {
             'Linear Regression': LinearRegression(),
             'Random Forest': RandomForestRegressor(n_estimators=50, max_depth=20),
@@ -51,6 +53,7 @@ if uploaded_file:
         results = {}
         residual_data = []
 
+        # === TRADITIONAL MODELS ===
         for name, model in models.items():
             y_true, y_pred = [], []
             for train_idx, test_idx in LeaveOneOut().split(X_scaled):
@@ -65,7 +68,7 @@ if uploaded_file:
                 'R2': r2_score(y_true, y_pred)
             }
 
-        # ANN Model
+        # === ANN MODEL ===
         def build_ann_model(input_dim):
             model = tf.keras.models.Sequential([
                 tf.keras.layers.Dense(32, activation='relu', input_shape=(input_dim,)),
@@ -94,10 +97,9 @@ if uploaded_file:
         residuals_df = pd.DataFrame(residual_data)
         residuals_df['Error'] = residuals_df['True'] - residuals_df['Predicted']
 
-        # Layout for side-by-side plots
+        # === FIRST ROW: Residuals + 3D ===
         col1, col2 = st.columns([1, 1])
 
-        # --- LEFT: 2D Residuals Plot ---
         with col1:
             st.markdown("### 📈 Residuals: True vs Predicted")
             fig2d, ax = plt.subplots(figsize=(6, 5))
@@ -108,11 +110,9 @@ if uploaded_file:
             ax.grid(True)
             st.pyplot(fig2d)
 
-        # --- RIGHT: 3D Plot with Lines ---
         with col2:
             st.markdown("### 🌐 3D: True vs Predicted vs Error (Connected by Model)")
             fig3d = go.Figure()
-
             for model in residuals_df['Model'].unique():
                 model_data = residuals_df[residuals_df['Model'] == model]
                 fig3d.add_trace(go.Scatter3d(
@@ -124,7 +124,6 @@ if uploaded_file:
                     line=dict(color=model_colors[model]),
                     marker=dict(size=5)
                 ))
-
             fig3d.update_layout(
                 scene=dict(
                     xaxis_title='True',
@@ -136,46 +135,43 @@ if uploaded_file:
             )
             st.plotly_chart(fig3d, use_container_width=True)
 
-        # Create another row of side-by-side charts
+        # === SECOND ROW: Bar + Error Dist ===
         st.markdown("----")
         col3, col4 = st.columns([1, 1])
 
-        # --- LEFT: Bar Chart of Performance Metrics ---
         with col3:
-          st.markdown("### 📊 Model Performance Metrics (Bar Chart)")
-          fig_bar, ax = plt.subplots(figsize=(6, 5))
-          results_df[['MAE', 'RMSE', 'R2']].plot(kind='bar', ax=ax)
-          ax.set_ylabel("Score")
-          ax.set_title("MAE / RMSE / R² per Model")
-          ax.grid(True)
-          plt.xticks(rotation=45)
-          st.pyplot(fig_bar)
+            st.markdown("### 📊 MAE / RMSE / R² by Model")
+            fig_bar, ax = plt.subplots(figsize=(6, 5))
+            results_df[['MAE', 'RMSE', 'R2']].plot(kind='bar', ax=ax)
+            ax.set_ylabel("Score")
+            ax.set_title("Model Performance Metrics")
+            ax.grid(True)
+            ax.set_xticklabels(results_df.index, rotation=45)
+            st.pyplot(fig_bar)
 
-  # --- RIGHT: Error Distribution Plot ---
         with col4:
-          st.markdown("### 📉 Error Distribution per Model")
-          fig_dist, ax = plt.subplots(figsize=(6, 5))
-          for model in residuals_df['Model'].unique():
-           sns.kdeplot(
-            data=residuals_df[residuals_df['Model'] == model],
-            x='Error',
-            label=model,
-            ax=ax,
-            fill=True,
-            alpha=0.4,
-            linewidth=2
-        )
-        ax.set_xlabel("Error (True - Predicted)")
-        ax.set_title("Residual Distributions")
-        ax.grid(True)
-        ax.legend()
+            st.markdown("### 📉 Error Distribution by Model")
+            fig_dist, ax = plt.subplots(figsize=(6, 5))
+            for model in residuals_df['Model'].unique():
+                sns.kdeplot(
+                    data=residuals_df[residuals_df['Model'] == model],
+                    x='Error',
+                    label=model,
+                    ax=ax,
+                    fill=True,
+                    alpha=0.4,
+                    linewidth=2
+                )
+            ax.set_xlabel("Error (True - Predicted)")
+            ax.set_title("Residual Distributions")
+            ax.grid(True)
+            ax.legend()
+            st.pyplot(fig_dist)
 
-
-        st.pyplot(fig_dist)
+        # === TABLE + DOWNLOADS ===
         st.markdown("---")
-        st.markdown("### 📋 Performance Metrics")
+        st.markdown("### 📋 Final Model Performance Table")
         st.dataframe(results_df.style.format("{:.4f}"))
 
-        # Download buttons
         st.download_button("📥 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
         st.download_button("📥 Download Residuals CSV", residuals_df.to_csv(index=False).encode(), file_name="model_residuals.csv")
