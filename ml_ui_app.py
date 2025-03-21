@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
+import plotly.graph_objects as go
 from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.linear_model import LinearRegression
@@ -13,21 +13,21 @@ import xgboost as xgb
 import lightgbm as lgb
 import tensorflow as tf
 
-st.set_page_config(layout="wide")
-st.title("📊 Machine Learning for Dopamine Detection")
+# Set wide layout and custom title
+st.set_page_config(layout="wide", page_title="Dopamine ML Model App")
+st.markdown("<h1 style='text-align: center;'>🧠 Machine Learning for Dopamine Detection</h1>", unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload your CSV file with features and target", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.write("### Data Preview", df.head())
 
     feature_options = list(df.columns)
-    target = st.selectbox("Select target column (e.g., Dopamine_Concentration):", feature_options)
+    target = st.selectbox("🎯 Select your target column (e.g., Dopamine_Concentration)", feature_options)
     feature_options.remove(target)
-    selected_features = st.multiselect("Select feature columns to use:", feature_options, default=feature_options[:3])
+    selected_features = st.multiselect("🧪 Select feature columns", feature_options, default=feature_options[:3])
 
-    if st.button("Run Machine Learning"):
+    if st.button("🚀 Run Machine Learning Pipeline"):
         X = df[selected_features].values
         y = df[target].values
         scaler = MinMaxScaler()
@@ -65,7 +65,7 @@ if uploaded_file:
                 'R2': r2_score(y_true, y_pred)
             }
 
-        # ANN
+        # ANN Model
         def build_ann_model(input_dim):
             model = tf.keras.models.Sequential([
                 tf.keras.layers.Dense(32, activation='relu', input_shape=(input_dim,)),
@@ -90,33 +90,56 @@ if uploaded_file:
             'R2': r2_score(y_true_ann, y_pred_ann)
         }
 
-        # Display Results
         results_df = pd.DataFrame(results).T
-        st.subheader("📋 Performance Metrics")
-        st.dataframe(results_df)
-
         residuals_df = pd.DataFrame(residual_data)
         residuals_df['Error'] = residuals_df['True'] - residuals_df['Predicted']
 
-        # 2D Residuals Plot
-        st.subheader("📈 Residual Plot (True vs Predicted)")
-        fig2d, ax = plt.subplots(figsize=(8, 6))
-        sns.scatterplot(data=residuals_df, x='True', y='Predicted', hue='Model', s=80, ax=ax)
-        ax.plot([min(y), max(y)], [min(y), max(y)], 'k--')
-        st.pyplot(fig2d)
+        # Layout for side-by-side plots
+        col1, col2 = st.columns([1, 1])
 
-        # 3D Interactive Plot
-        st.subheader("🌐 3D Plot (True vs Predicted vs Error)")
-        fig3d = px.scatter_3d(
-            residuals_df,
-            x='True',
-            y='Predicted',
-            z='Error',
-            color='Model',
-            size_max=10
-        )
-        st.plotly_chart(fig3d, use_container_width=True)
+        # --- LEFT: 2D Residuals Plot ---
+        with col1:
+            st.markdown("### 📈 Residuals: True vs Predicted")
+            fig2d, ax = plt.subplots(figsize=(6, 5))
+            sns.scatterplot(data=residuals_df, x='True', y='Predicted', hue='Model', s=90, ax=ax)
+            ax.plot([min(y), max(y)], [min(y), max(y)], 'k--')
+            ax.set_xlabel("True")
+            ax.set_ylabel("Predicted")
+            ax.grid(True)
+            st.pyplot(fig2d)
 
-        # CSV Download
+        # --- RIGHT: 3D Plot with Lines ---
+        with col2:
+            st.markdown("### 🌐 3D: True vs Predicted vs Error (Connected by Model)")
+            fig3d = go.Figure()
+
+            for model in residuals_df['Model'].unique():
+                model_data = residuals_df[residuals_df['Model'] == model]
+                fig3d.add_trace(go.Scatter3d(
+                    x=model_data['True'],
+                    y=model_data['Predicted'],
+                    z=model_data['Error'],
+                    mode='lines+markers',
+                    name=model,
+                    line=dict(color=model_colors[model]),
+                    marker=dict(size=5)
+                ))
+
+            fig3d.update_layout(
+                scene=dict(
+                    xaxis_title='True',
+                    yaxis_title='Predicted',
+                    zaxis_title='Error',
+                ),
+                margin=dict(l=0, r=0, t=40, b=0),
+                height=500
+            )
+            st.plotly_chart(fig3d, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📋 Performance Metrics")
+        st.dataframe(results_df.style.format("{:.4f}"))
+
+        # Download buttons
         st.download_button("📥 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
         st.download_button("📥 Download Residuals CSV", residuals_df.to_csv(index=False).encode(), file_name="model_residuals.csv")
