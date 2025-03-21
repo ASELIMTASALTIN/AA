@@ -139,6 +139,36 @@ if uploaded_file:
         st.markdown("---")
         st.markdown("### 📋 Performance Metrics")
         st.dataframe(results_df.style.format("{:.4f}"))
+        # Create another row of side-by-side charts
+        st.markdown("----")
+        col3, col4 = st.columns([1, 1])
+
+        # --- LEFT: Bar Chart of Performance Metrics ---
+        with col3:
+          st.markdown("### 📊 Model Performance Metrics (Bar Chart)")
+          fig_bar, ax = plt.subplots(figsize=(6, 5))
+          results_df[['MAE', 'RMSE', 'R2']].plot(kind='bar', ax=ax)
+          ax.set_ylabel("Score")
+          ax.set_title("MAE / RMSE / R² per Model")
+          ax.grid(True)
+          plt.xticks(rotation=45)
+          st.pyplot(fig_bar)
+
+        # --- RIGHT: Error Distribution Plot ---
+        with col4:
+         st.markdown("### 📉 Error Distribution per Model")
+         fig_dist, ax = plt.subplots(figsize=(6, 5))
+         for model in residuals_df['Model'].unique():
+          sns.kdeplot(
+            data=residuals_df[residuals_df['Model'] == model],
+            x='Error',
+            label=model,
+            ax=ax,
+            fill=True
+        )
+        ax.set_xlabel("Error (True - Predicted)")
+        ax.grid(True)
+        st.pyplot(fig_dist)
 
         # Download buttons
         st.download_button("📥 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
