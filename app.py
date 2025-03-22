@@ -162,31 +162,44 @@ if uploaded_file:
             st.pyplot(fig_dist)
 
         st.markdown("## 📊 Comparative Graphs: Experimental vs ML Predictions")
-        x_feature = st.selectbox("🛏️ Select x-axis feature", selected_features)
 
+        # Let user choose x-axis from selected features
+        x_feature = st.selectbox("🛠️ Select x-axis feature", selected_features)
+
+        # Group by sample if it exists
         samples = df['Sample'].unique() if 'Sample' in df.columns else ['All']
+
+        # Loop through samples in rows of 2 columns
         for i in range(0, len(samples), 2):
-            row = st.columns(2)
-            for j in range(2):
-                if i + j < len(samples):
-                    sample = samples[i + j]
-                    sample_df = df[df['Sample'] == sample] if sample != 'All' else df
+         row = st.columns(2)
+         for j in range(2):
+          if i + j < len(samples):
+            sample = samples[i + j]
+            sample_df = df[df['Sample'] == sample] if sample != 'All' else df
 
-                    fig, ax = plt.subplots(figsize=(6, 5))
-                    ax.plot(sample_df[x_feature], sample_df[target], label='Experimental', color='red')
-                    if 'ANN_Predicted' in sample_df.columns:
-                        ax.plot(sample_df[x_feature], sample_df['ANN_Predicted'], label='ANN', linestyle='dotted', color='blue')
-                    if 'SVR_Predicted' in sample_df.columns:
-                        ax.plot(sample_df[x_feature], sample_df['SVR_Predicted'], label='SVR', linestyle='dotted', color='black')
+            fig, ax = plt.subplots(figsize=(6, 5))
 
-                    if (sample_df[target] > 0).all():
-                        ax.set_yscale("log")
-                    ax.set_title(f"{target} vs {x_feature} — {sample}")
-                    ax.set_xlabel(x_feature)
-                    ax.set_ylabel(target)
-                    ax.grid(True)
-                    ax.legend()
-                    row[j].pyplot(fig)
+            # 🔴 Experimental
+            ax.plot(sample_df[x_feature], sample_df[target], label='Experimental', color='red')
+
+            # 🔵 ANN Prediction
+            if 'ANN_Predicted' in sample_df.columns:
+                ax.plot(sample_df[x_feature], sample_df['ANN_Predicted'], label='Predicted (ANN)', linestyle='dotted', color='blue')
+
+            # ⚫ SVR Prediction
+            if 'SVR_Predicted' in sample_df.columns:
+                ax.plot(sample_df[x_feature], sample_df['SVR_Predicted'], label='Predicted (SVR)', linestyle='dotted', color='black')
+
+            # Use log scale only if all y-values are positive
+            if (sample_df[target] > 0).all():
+                ax.set_yscale("log")
+
+            ax.set_title(f"{target} vs {x_feature} — {sample}")
+            ax.set_xlabel(x_feature)
+            ax.set_ylabel(target)
+            ax.grid(True)
+            ax.legend()
+            row[j].pyplot(fig)
 
         st.markdown("---")
         st.markdown("### 📄 Final Model Performance Table")
