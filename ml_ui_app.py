@@ -13,6 +13,8 @@ from sklearn.preprocessing import MinMaxScaler
 import xgboost as xgb
 import lightgbm as lgb
 import tensorflow as tf
+from matplotlib.backends.backend_pdf import PdfPages
+from io import BytesIO
 
 # Streamlit app setup
 st.set_page_config(layout="wide", page_title="Ahmet Selim Taşaltın's Comparative Engine")
@@ -56,6 +58,7 @@ if uploaded_file:
         results = {}
         residual_data = []
         prediction_by_model = {model: [] for model in models}
+        prediction_by_model['ANN'] = []  # Fix
 
         for name, model in models.items():
             y_true, y_pred = [], []
@@ -141,6 +144,9 @@ if uploaded_file:
         st.markdown("----")
         st.markdown("## 📊 Comparative Graphs: Experimental vs ML Predictions")
         x_feature = st.selectbox("🛏️ Select x-axis feature", selected_features)
+        visible_models = st.multiselect("🎛️ Toggle visible models", list(results.keys()) + ['ANN'], default=list(results.keys()) + ['ANN'])
+
+        figs_for_pdf = []
 
         samples = df['Sample'].unique() if 'Sample' in df.columns else ['All']
         for i in range(0, len(samples), 2):
@@ -153,7 +159,7 @@ if uploaded_file:
                     fig, ax = plt.subplots(figsize=(6, 5))
                     ax.plot(sample_df[x_feature], sample_df[target], label='Experimental Data', color='red', linewidth=2)
 
-                    for model in results.keys():
+                    for model in visible_models:
                         pred_col = f"{model}_Predicted"
                         if pred_col in sample_df.columns:
                             linestyle = {
@@ -176,6 +182,16 @@ if uploaded_file:
                     ax.grid(True)
                     ax.legend()
                     row[j].pyplot(fig)
+                    figs_for_pdf.append(fig)
+
+        st.download_button("📥 Download Comparative Graphs as PDF", data=BytesIO(), file_name="comparative_graphs.pdf", disabled=True, help="This will be enabled once PDF export is generated.")
+
+        pdf_buffer = BytesIO()
+        with PdfPages(pdf_buffer) as pdf:
+            for fig in figs_for_pdf:
+                pdf.savefig(fig)
+        pdf_buffer.seek(0)
+        st.download_button("📥 Export All Comparative Graphs to PDF", pdf_buffer, file_name="comparative_plots.pdf")
 
         st.markdown("----")
         col3, col4 = st.columns([1, 1])
