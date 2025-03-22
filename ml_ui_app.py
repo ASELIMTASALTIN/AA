@@ -221,6 +221,60 @@ if uploaded_file:
             ax.legend()
             st.pyplot(fig_dist)
 
+
+
+        # ▶️ Generate 20 comparative plots for C(6, 3) model combinations
+        from itertools import combinations
+        st.markdown("### 🧪 3-Model Combinations (Experimental + 3 ML Predictions)")
+
+        model_list = list(results.keys()) + ['ANN']
+        combo_figs = []
+        combination_sets = list(combinations(model_list, 3))
+
+        for idx, combo in enumerate(combination_sets):
+            fig, ax = plt.subplots(figsize=(6, 5))
+            sample_df = df
+            ax.plot(sample_df[x_feature], sample_df[target], label='Experimental Data', color='red', linewidth=2)
+
+            for model in combo:
+                pred_col = f"{model}_Predicted"
+                if pred_col in sample_df.columns:
+                    linestyle = {
+                        'Linear Regression': 'dashed',
+                        'Random Forest': 'dashdot',
+                        'XGBoost': 'dotted',
+                        'LightGBM': (0, (3, 5, 1, 5)),
+                        'ANN': 'dotted',
+                        'SVR': 'dashed'
+                    }.get(model, 'dotted')
+                    ax.plot(sample_df[x_feature], sample_df[pred_col],
+                            label=f"{model}", linestyle=linestyle,
+                            color=model_colors.get(model, 'gray'))
+
+            if (sample_df[target] > 0).all():
+                ax.set_yscale("log")
+            ax.set_title(f"Experimental vs {', '.join(combo)}")
+            ax.set_xlabel(x_feature)
+            ax.set_ylabel(target)
+            ax.grid(True)
+            ax.legend()
+
+            st.pyplot(fig)
+            combo_figs.append(fig)
+
+        st.markdown("---")
+        st.markdown("### 📥 Export All 3-Model Comparison Graphs to PDF")
+        pdf_combo_buffer = BytesIO()
+        with PdfPages(pdf_combo_buffer) as pdf:
+            for fig in combo_figs:
+                pdf.savefig(fig)
+        pdf_combo_buffer.seek(0)
+        st.download_button("📄 Download All 3-Model Comparisons (PDF)", pdf_combo_buffer, file_name="3_model_comparisons.pdf")
+
+
+
+
+
         st.markdown("---")
         st.markdown("### 📋 Performance Metrics")
         st.dataframe(results_df.style.format("{:.4f}"))
