@@ -13,11 +13,9 @@ import xgboost as xgb
 import lightgbm as lgb
 import tensorflow as tf
 
-# === PAGE SETUP ===
 st.set_page_config(layout="wide", page_title="Ahmet Selim Taşaltın's Comparative Engine")
 st.markdown("<h1 style='text-align: center;'>⚙️ Ahmet Selim Taşaltın's Comparative Engine</h1>", unsafe_allow_html=True)
 
-# === UPLOAD CSV ===
 uploaded_file = st.file_uploader("Upload your CSV file with features and target", type=["csv"])
 
 if uploaded_file:
@@ -34,7 +32,6 @@ if uploaded_file:
         scaler = MinMaxScaler()
         X_scaled = scaler.fit_transform(X)
 
-        # === MODELS ===
         models = {
             'Linear Regression': LinearRegression(),
             'Random Forest': RandomForestRegressor(n_estimators=50, max_depth=20),
@@ -53,7 +50,6 @@ if uploaded_file:
         results = {}
         residual_data = []
 
-        # === TRADITIONAL MODELS ===
         for name, model in models.items():
             y_true, y_pred = [], []
             for train_idx, test_idx in LeaveOneOut().split(X_scaled):
@@ -68,7 +64,6 @@ if uploaded_file:
                 'R2': r2_score(y_true, y_pred)
             }
 
-        # === ANN MODEL ===
         def build_ann_model(input_dim):
             model = tf.keras.models.Sequential([
                 tf.keras.layers.Dense(32, activation='relu', input_shape=(input_dim,)),
@@ -97,7 +92,6 @@ if uploaded_file:
         residuals_df = pd.DataFrame(residual_data)
         residuals_df['Error'] = residuals_df['True'] - residuals_df['Predicted']
 
-        # === FIRST ROW: Residuals + 3D ===
         col1, col2 = st.columns([1, 1])
 
         with col1:
@@ -111,7 +105,7 @@ if uploaded_file:
             st.pyplot(fig2d)
 
         with col2:
-            st.markdown("### 🌐 3D: True vs Predicted vs Error (Connected by Model)")
+            st.markdown("### 🌐 3D: True vs Predicted vs Error")
             fig3d = go.Figure()
             for model in residuals_df['Model'].unique():
                 model_data = residuals_df[residuals_df['Model'] == model]
@@ -135,7 +129,6 @@ if uploaded_file:
             )
             st.plotly_chart(fig3d, use_container_width=True)
 
-        # === SECOND ROW: Bar + Error Dist ===
         st.markdown("----")
         col3, col4 = st.columns([1, 1])
 
@@ -168,10 +161,36 @@ if uploaded_file:
             ax.legend()
             st.pyplot(fig_dist)
 
-        # === TABLE + DOWNLOADS ===
+        st.markdown("## 📊 Comparative Graphs: Experimental vs ML Predictions")
+        x_feature = st.selectbox("🛏️ Select x-axis feature", selected_features)
+
+        samples = df['Sample'].unique() if 'Sample' in df.columns else ['All']
+        for i in range(0, len(samples), 2):
+            row = st.columns(2)
+            for j in range(2):
+                if i + j < len(samples):
+                    sample = samples[i + j]
+                    sample_df = df[df['Sample'] == sample] if sample != 'All' else df
+
+                    fig, ax = plt.subplots(figsize=(6, 5))
+                    ax.plot(sample_df[x_feature], sample_df[target], label='Experimental', color='red')
+                    if 'ANN_Predicted' in sample_df.columns:
+                        ax.plot(sample_df[x_feature], sample_df['ANN_Predicted'], label='ANN', linestyle='dotted', color='blue')
+                    if 'SVR_Predicted' in sample_df.columns:
+                        ax.plot(sample_df[x_feature], sample_df['SVR_Predicted'], label='SVR', linestyle='dotted', color='black')
+
+                    if (sample_df[target] > 0).all():
+                        ax.set_yscale("log")
+                    ax.set_title(f"{target} vs {x_feature} — {sample}")
+                    ax.set_xlabel(x_feature)
+                    ax.set_ylabel(target)
+                    ax.grid(True)
+                    ax.legend()
+                    row[j].pyplot(fig)
+
         st.markdown("---")
-        st.markdown("### 📋 Final Model Performance Table")
+        st.markdown("### 📄 Final Model Performance Table")
         st.dataframe(results_df.style.format("{:.4f}"))
 
-        st.download_button("📥 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
-        st.download_button("📥 Download Residuals CSV", residuals_df.to_csv(index=False).encode(), file_name="model_residuals.csv")
+        st.download_button("📅 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
+        st.download_button("📅 Download Residuals CSV", residuals_df.to_csv(index=False).encode(), file_name="model_residuals.csv")
