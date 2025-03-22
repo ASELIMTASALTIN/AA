@@ -1,4 +1,4 @@
-import streamlit as st
+...import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -137,8 +137,15 @@ if uploaded_file:
             st.plotly_chart(fig3d, use_container_width=True)
 
         # Add ANN and SVR predictions to dataframe for individual plotting
-        df['ANN_Predicted'] = ann_model.predict(X_scaled).flatten()
-        df['SVR_Predicted'] = SVR(kernel='rbf', C=100, epsilon=0.1).fit(X_scaled, y).predict(X_scaled)
+        # Train final ANN model on all data for visualization
+        final_ann_model = build_ann_model(X_scaled.shape[1])
+        final_ann_model.fit(X_scaled, y, epochs=150, verbose=0)
+        df['ANN_Predicted'] = final_ann_model.predict(X_scaled).flatten()
+
+        # Train SVR on all data for plotting
+        final_svr_model = SVR(kernel='rbf', C=100, epsilon=0.1)
+        df['SVR_Predicted'] = final_svr_model.fit(X_scaled, y).predict(X_scaled)
+
 
         st.markdown("---")
         st.markdown("## 📊 Comparative Graphs: Experimental vs ML Predictions")
