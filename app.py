@@ -1,4 +1,4 @@
-...import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,36 +13,36 @@ from sklearn.svm import SVR
 import xgboost as xgb
 import lightgbm as lgb
 import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
 
-# Page settings
+# Set wide layout and custom title
 st.set_page_config(layout="wide", page_title="Ahmet Selim Taşaltın's Comparative Engine")
-st.markdown("<h1 style='text-align: center;'>🔬 Ahmet Selim Taşaltın's Comparative Engine</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📊 Ahmet Selim Taşaltın's Comparative Engine</h1>", unsafe_allow_html=True)
 
-# Upload CSV
-uploaded_file = st.file_uploader("📁 Upload your CSV file", type=["csv"])
+uploaded_file = st.file_uploader("📁 Upload your CSV file with features and target", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
-    # Feature selection
     feature_options = list(df.columns)
     target = st.selectbox("🎯 Select your target column", feature_options)
     feature_options.remove(target)
-    selected_features = st.multiselect("🧪 Select feature columns", feature_options, default=feature_options[:2])
+    selected_features = st.multiselect("🧪 Select feature columns", feature_options, default=feature_options[:3])
 
-    if st.button("🚀 Run Model Comparison"):
+    svr_c_value = st.slider("🔧 SVR: Select C parameter", min_value=0.01, max_value=100.0, value=1.0, step=0.1)
+
+    if st.button("🚀 Run Comparative Engine"):
         X = df[selected_features].values
         y = df[target].values
         scaler = MinMaxScaler()
         X_scaled = scaler.fit_transform(X)
 
-        # Models
         models = {
             'Linear Regression': LinearRegression(),
             'Random Forest': RandomForestRegressor(n_estimators=50, max_depth=20),
             'XGBoost': xgb.XGBRegressor(n_estimators=100, learning_rate=0.3, verbosity=0),
-            'LightGBM': lgb.LGBMRegressor(n_estimators=10, learning_rate=0.1),
-            'SVR': SVR(kernel='rbf', C=100, epsilon=0.1)
+            'LightGBM': lgb.LGBMRegressor(n_estimators=5, learning_rate=0.1)
         }
 
         model_colors = {
@@ -71,14 +71,13 @@ if uploaded_file:
                 'R2': r2_score(y_true, y_pred)
             }
 
-        # ANN Model
         def build_ann_model(input_dim):
-            model = tf.keras.Sequential([
-                tf.keras.layers.Input(shape=(input_dim,)),
-                tf.keras.layers.Dense(32, activation='relu'),
-                tf.keras.layers.Dense(128, activation='relu'),
-                tf.keras.layers.Dense(32, activation='relu'),
-                tf.keras.layers.Dense(1, activation='linear')
+            model = Sequential([
+                Input(shape=(input_dim,)),
+                Dense(32, activation='relu'),
+                Dense(128, activation='relu'),
+                Dense(32, activation='relu'),
+                Dense(1, activation='linear')
             ])
             model.compile(optimizer=tf.keras.optimizers.Adam(0.01), loss='mse')
             return model
@@ -91,25 +90,37 @@ if uploaded_file:
             y_true_ann.append(y[test_idx][0])
             y_pred_ann.append(pred[0][0])
             residual_data.append({'Model': 'ANN', 'True': y[test_idx][0], 'Predicted': pred[0][0]})
-
         results['ANN'] = {
             'MAE': mean_absolute_error(y_true_ann, y_pred_ann),
             'RMSE': mean_squared_error(y_true_ann, y_pred_ann) ** 0.5,
             'R2': r2_score(y_true_ann, y_pred_ann)
         }
 
-        # Create dataframe for metrics and residuals
+        # SVR Model (with adjustable C)
+        svr_model = SVR(kernel='rbf', C=svr_c_value)
+        y_true_svr, y_pred_svr = [], []
+        for train_idx, test_idx in LeaveOneOut().split(X_scaled):
+            svr_model.fit(X_scaled[train_idx], y[train_idx])
+            pred = svr_model.predict(X_scaled[test_idx])
+            y_true_svr.append(y[test_idx][0])
+            y_pred_svr.append(pred[0])
+            residual_data.append({'Model': 'SVR', 'True': y[test_idx][0], 'Predicted': pred[0]})
+        results['SVR'] = {
+            'MAE': mean_absolute_error(y_true_svr, y_pred_svr),
+            'RMSE': mean_squared_error(y_true_svr, y_pred_svr) ** 0.5,
+            'R2': r2_score(y_true_svr, y_pred_svr)
+        }
+
         results_df = pd.DataFrame(results).T
         residuals_df = pd.DataFrame(residual_data)
         residuals_df['Error'] = residuals_df['True'] - residuals_df['Predicted']
 
-        # Main visualizations
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("### 📈 Residuals: True vs Predicted")
-            fig2d, ax = plt.subplots()
-            sns.scatterplot(data=residuals_df, x='True', y='Predicted', hue='Model', s=80, ax=ax)
+            fig2d, ax = plt.subplots(figsize=(6, 5))
+            sns.scatterplot(data=residuals_df, x='True', y='Predicted', hue='Model', s=90, ax=ax)
             ax.plot([min(y), max(y)], [min(y), max(y)], 'k--')
             ax.set_xlabel("True")
             ax.set_ylabel("Predicted")
@@ -127,79 +138,20 @@ if uploaded_file:
                     z=model_data['Error'],
                     mode='lines+markers',
                     name=model,
-                    line=dict(color=model_colors[model]),
-                    marker=dict(size=4)
+                    line=dict(color=model_colors.get(model, 'gray')),
+                    marker=dict(size=5)
                 ))
             fig3d.update_layout(
                 scene=dict(xaxis_title='True', yaxis_title='Predicted', zaxis_title='Error'),
+                margin=dict(l=0, r=0, t=40, b=0),
                 height=500
             )
             st.plotly_chart(fig3d, use_container_width=True)
 
-        # Add ANN and SVR predictions to dataframe for individual plotting
-        # Train final ANN model on all data for visualization
-        final_ann_model = build_ann_model(X_scaled.shape[1])
-        final_ann_model.fit(X_scaled, y, epochs=150, verbose=0)
-        df['ANN_Predicted'] = final_ann_model.predict(X_scaled).flatten()
-
-        # Train SVR on all data for plotting
-        final_svr_model = SVR(kernel='rbf', C=100, epsilon=0.1)
-        df['SVR_Predicted'] = final_svr_model.fit(X_scaled, y).predict(X_scaled)
-
-
         st.markdown("---")
-        st.markdown("## 📊 Comparative Graphs: Experimental vs ML Predictions")
-        x_feature = st.selectbox("🧭 Select x-axis", selected_features)
-        samples = df['Sample'].unique() if 'Sample' in df.columns else ['All']
-
-        for i in range(0, len(samples), 2):
-            row = st.columns(2)
-            for j in range(2):
-                if i + j < len(samples):
-                    sample = samples[i + j]
-                    sample_df = df[df['Sample'] == sample] if sample != 'All' else df
-
-                    fig, ax = plt.subplots()
-                    ax.plot(sample_df[x_feature], sample_df[target], label='Experimental Data', color='red')
-                    ax.plot(sample_df[x_feature], sample_df['ANN_Predicted'], label='Predicted Data (ANN)', linestyle='dotted', color='blue')
-                    ax.plot(sample_df[x_feature], sample_df['SVR_Predicted'], label='Predicted Data (SVR)', linestyle='dotted', color='black')
-                    if (sample_df[target] > 0).all():
-                        ax.set_yscale("log")
-                    ax.set_title(f"{target} vs {x_feature} — {sample}")
-                    ax.set_xlabel(x_feature)
-                    ax.set_ylabel(target)
-                    ax.grid(True)
-                    ax.legend()
-                    row[j].pyplot(fig)
-
-        # Bottom row with additional insights
-        st.markdown("----")
-        col3, col4 = st.columns(2)
-
-        with col3:
-            st.markdown("### 📊 Metrics Comparison")
-            fig_bar, ax = plt.subplots()
-            results_df[['MAE', 'RMSE', 'R2']].plot(kind='bar', ax=ax)
-            ax.set_title("Performance Metrics per Model")
-            ax.set_ylabel("Score")
-            ax.grid(True)
-            plt.xticks(rotation=45)
-            st.pyplot(fig_bar)
-
-        with col4:
-            st.markdown("### 📉 Error Distributions")
-            fig_dist, ax = plt.subplots()
-            for model in residuals_df['Model'].unique():
-                sns.kdeplot(data=residuals_df[residuals_df['Model'] == model], x='Error', label=model, ax=ax, fill=True)
-            ax.set_xlabel("Error")
-            ax.set_title("Residual Distributions")
-            ax.grid(True)
-            ax.legend()
-            st.pyplot(fig_dist)
-
-        # Results Table and Downloads
-        st.markdown("---")
-        st.markdown("### 📋 Final Results")
+        st.markdown("### 📋 Performance Metrics")
         st.dataframe(results_df.style.format("{:.4f}"))
-        st.download_button("📥 Download Metrics", results_df.to_csv().encode(), file_name="model_metrics.csv")
-        st.download_button("📥 Download Residuals", residuals_df.to_csv(index=False).encode(), file_name="residuals.csv")
+
+        # Download buttons
+        st.download_button("📥 Download Results CSV", results_df.to_csv().encode(), file_name="model_results.csv")
+        st.download_button("📥 Download Residuals CSV", residuals_df.to_csv(index=False).encode(), file_name="model_residuals.csv")
