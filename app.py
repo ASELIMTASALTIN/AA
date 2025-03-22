@@ -65,15 +65,15 @@ if uploaded_file:
             }
 
         def build_ann_model(input_dim):
-            model = tf.keras.models.Sequential([
-                tf.keras.layers.Dense(32, activation='relu', input_shape=(input_dim,)),
-                tf.keras.layers.Dense(128, activation='relu'),
-                tf.keras.layers.Dense(32, activation='relu'),
-                tf.keras.layers.Dense(1, activation='linear')
-            ])
-            model.compile(optimizer=tf.keras.optimizers.Adam(0.01), loss='mse')
-            return model
-
+         inputs = tf.keras.Input(shape=(input_dim,))
+         x = tf.keras.layers.Dense(32, activation='relu')(inputs)
+         x = tf.keras.layers.Dense(128, activation='relu')(x)
+         x = tf.keras.layers.Dense(32, activation='relu')(x)
+         outputs = tf.keras.layers.Dense(1, activation='linear')(x)
+         model = tf.keras.Model(inputs=inputs, outputs=outputs)
+         model.compile(optimizer=tf.keras.optimizers.Adam(0.01), loss='mse')
+         return model
+  
         y_true_ann, y_pred_ann = [], []
         for train_idx, test_idx in LeaveOneOut().split(X_scaled):
             ann = build_ann_model(X_scaled.shape[1])
