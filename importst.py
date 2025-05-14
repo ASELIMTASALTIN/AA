@@ -69,7 +69,7 @@ if uploaded_file:
 
         # Compute ANN metrics
         if y_true_ann and y_pred_ann:
-            rmse_ann = mean_squared_error(y_true_ann, y_pred_ann, squared=False)
+            rmse_ann = mean_squared_error(y_true_ann, y_pred_ann) ** 0.5
             r2_ann = r2_score(y_true_ann, y_pred_ann)
             results["ANN"] = {"RMSE": rmse_ann, "R2": r2_ann}
 
