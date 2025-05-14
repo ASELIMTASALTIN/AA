@@ -1,31 +1,31 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import mean_squared_error, r2_score
 import tensorflow as tf
 
-st.set_page_config(layout="wide", page_title="Electrochemical Curve-Based Concentration Prediction")
-st.title("🔬 Curve-Based Concentration Prediction using Electrochemical Features")
+# Streamlit setup
+st.set_page_config(layout="wide")
+st.title("🔬 Curve-wise Concentration Prediction")
 
-uploaded_file = st.file_uploader("📂 Upload your CSV with Electrochemical Features", type=["csv"])
+uploaded_file = st.file_uploader("📥 Upload your CSV with Electrochemical Features", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
+    st.markdown("### 📋 Raw Data")
+    st.dataframe(df)
 
-    if "Curve" not in df.columns or "Concentration" not in df.columns:
-        st.error("CSV must contain 'Curve' and 'Concentration' columns.")
+    # Validate necessary columns
+    if "Concentration" not in df.columns or "Curve" not in df.columns:
+        st.error("CSV must include 'Curve' and 'Concentration' columns.")
     else:
-        st.markdown("### 📑 Uploaded Data")
-        st.dataframe(df)
-
-        # Extract features and labels
+        # Feature matrix and target
         X = df.drop(columns=["Curve", "Concentration"]).values
         y = df["Concentration"].values
 
-        # Models to evaluate
         models = {
             "Linear Regression": LinearRegression(),
             "SVR": SVR(kernel='rbf', C=100, epsilon=0.01)
@@ -34,7 +34,7 @@ if uploaded_file:
         results = {}
         loo = LeaveOneOut()
 
-        # Evaluate traditional ML models
+        # Evaluate classical models
         for name, model in models.items():
             y_true, y_pred = [], []
             for train_idx, test_idx in loo.split(X):
@@ -42,8 +42,8 @@ if uploaded_file:
                 pred = model.predict(X[test_idx])
                 y_true.append(y[test_idx][0])
                 y_pred.append(pred[0])
-            rmse_ann = mean_squared_error(y_true_ann, y_pred_ann) ** 0.5
-            r2_ann = r2_score(y_true_ann, y_pred_ann)
+            rmse = mean_squared_error(y_true, y_pred, squared=False)
+            r2 = r2_score(y_true, y_pred)
             results[name] = {"RMSE": rmse, "R2": r2}
 
         # ANN model
@@ -58,17 +58,21 @@ if uploaded_file:
             return model
 
         y_true_ann, y_pred_ann = [], []
+
         for train_idx, test_idx in loo.split(X):
             ann_model = build_ann(X.shape[1])
             ann_model.fit(X[train_idx], y[train_idx], epochs=200, verbose=0)
-            pred = ann_model.predict(X[test_idx])
-            y_true_ann.append(y[test_idx][0])
-            y_pred_ann.append(pred[0][0])
-        rmse_ann = mean_squared_error(y_true_ann, y_pred_ann, squared=False)
-        r2_ann = r2_score(y_true_ann, y_pred_ann)
-        results["ANN"] = {"RMSE": rmse_ann, "R2": r2_ann}
+            pred = ann_model.predict(X[test_idx], verbose=0)
+            y_true_ann.append(float(y[test_idx][0]))
+            y_pred_ann.append(float(pred[0][0]))
 
-        # Show model performance
-        st.markdown("### 📈 Model Performance (Leave-One-Out CV)")
-        for model, metrics in results.items():
-            st.markdown(f"- **{model}** — RMSE: `{metrics['RMSE']:.5f}` | R²: `{metrics['R2']:.5f}`")
+        # Compute ANN metrics
+        if y_true_ann and y_pred_ann:
+            rmse_ann = mean_squared_error(y_true_ann, y_pred_ann, squared=False)
+            r2_ann = r2_score(y_true_ann, y_pred_ann)
+            results["ANN"] = {"RMSE": rmse_ann, "R2": r2_ann}
+
+        # Display results
+        st.markdown("## 📊 Model Performance Metrics")
+        for model, metric in results.items():
+            st.markdown(f"**{model}** — RMSE: `{metric['RMSE']:.5f}`, R²: `{metric['R2']:.5f}`")
