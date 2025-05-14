@@ -35,7 +35,9 @@ if uploaded_file:
             pred = model.predict(X[test_idx])
             y_true.append(y[test_idx][0])
             y_pred.append(pred[0])
-        rmse = mean_squared_error(y_true, y_pred, squared=False)
+            rmse = mean_squared_error(y_true, y_pred) ** 0.5
+            r2 = r2_score(y_true, y_pred)
+
         r2 = r2_score(y_true, y_pred)
         results[name] = {"RMSE": rmse, "R2": r2}
 
@@ -59,7 +61,9 @@ if uploaded_file:
         y_true_ann.append(y[test_idx][0])
         y_pred_ann.append(pred[0][0])
 
-    rmse_ann = mean_squared_error(y_true_ann, y_pred_ann, squared=False)
+        rmse_ann = mean_squared_error(y_true_ann, y_pred_ann) ** 0.5
+        r2_ann = r2_score(y_true_ann, y_pred_ann)
+
     r2_ann = r2_score(y_true_ann, y_pred_ann)
     results["ANN"] = {"RMSE": rmse_ann, "R2": r2_ann}
 
