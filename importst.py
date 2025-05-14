@@ -79,7 +79,7 @@ if uploaded_file:
         # Metrics
         st.markdown("### 📊 Model Performance")
         for name, preds in models.items():
-            rmse = mean_squared_error(y_test, preds, squared=False)
+            rmse = mean_squared_error(y_test, preds) ** 0.5
             r2 = r2_score(y_test, preds)
             st.write(f"**{name}** — RMSE: `{rmse:.4f}`, R²: `{r2:.4f}`")
 
