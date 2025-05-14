@@ -1,87 +1,68 @@
-import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
+import numpy as np
+import streamlit as st
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
+from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
-from io import BytesIO
-from matplotlib.backends.backend_pdf import PdfPages
 
-st.set_page_config(layout="wide", page_title="Electrochemical Concentration Predictor")
-st.title("🔬 Predict Concentration from Electrochemical Features")
+st.title("🔬 Concentration Prediction — Curve-wise Evaluation")
 
-uploaded_file = st.file_uploader("📂 Upload Extracted Features CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload your CSV with Electrochemical Features", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
-    st.dataframe(df.head())
+    st.dataframe(df)
 
-    feature_cols = ['PeakCurrent', 'Charge_Q', 'Skewness', 'PeakSecondDerivative', 'Impedance', 'Conductance']
-    target_col = 'Concentration'
+    X = df.drop(columns=["Curve", "Concentration"]).values
+    y = df["Concentration"].values
 
-    if not all(col in df.columns for col in feature_cols + [target_col]):
-        st.error("❌ Required columns not found. Ensure your CSV includes: " + ", ".join(feature_cols + [target_col]))
-    else:
-        X = df[feature_cols].values
-        y = df[target_col].values
-        scaler = MinMaxScaler()
-        X_scaled = scaler.fit_transform(X)
+    models = {
+        "Linear Regression": LinearRegression(),
+        "SVR": SVR(kernel='rbf', C=100, epsilon=0.01)
+    }
 
-        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+    results = {}
 
-        # Linear Regression
-        linreg = LinearRegression().fit(X_train, y_train)
-        y_pred_lr = linreg.predict(X_test)
+    loo = LeaveOneOut()
 
-        # SVR
-        svr_model = SVR(kernel='rbf', C=100, epsilon=0.1).fit(X_train, y_train)
-        y_pred_svr = svr_model.predict(X_test)
+    for name, model in models.items():
+        y_true, y_pred = [], []
+        for train_idx, test_idx in loo.split(X):
+            model.fit(X[train_idx], y[train_idx])
+            pred = model.predict(X[test_idx])
+            y_true.append(y[test_idx][0])
+            y_pred.append(pred[0])
+        rmse = mean_squared_error(y_true, y_pred, squared=False)
+        r2 = r2_score(y_true, y_pred)
+        results[name] = {"RMSE": rmse, "R2": r2}
 
-        # ANN
-        def build_ann_model(input_dim):
-            model = tf.keras.Sequential([
-                tf.keras.layers.Dense(64, activation='relu', input_shape=(input_dim,)),
-                tf.keras.layers.Dense(32, activation='relu'),
-                tf.keras.layers.Dense(1)
-            ])
-            model.compile(optimizer='adam', loss='mse')
-            return model
+    # ANN Model
+    def build_ann(input_dim):
+        model = tf.keras.Sequential([
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(input_dim,)),
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dense(1, activation='linear')
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        return model
 
-        ann_model = build_ann_model(X_train.shape[1])
-        ann_model.fit(X_train, y_train, epochs=150, verbose=0)
-        y_pred_ann = ann_model.predict(X_test).flatten()
+    y_true_ann, y_pred_ann = [], []
 
-        # Plot
-        models = {
-            'Linear Regression': y_pred_lr,
-            'SVR': y_pred_svr,
-            'ANN': y_pred_ann
-        }
+    for train_idx, test_idx in loo.split(X):
+        ann_model = build_ann(X.shape[1])
+        ann_model.fit(X[train_idx], y[train_idx], epochs=200, verbose=0)
+        pred = ann_model.predict(X[test_idx])
+        y_true_ann.append(y[test_idx][0])
+        y_pred_ann.append(pred[0][0])
 
-        pdf_buffer = BytesIO()
-        with PdfPages(pdf_buffer) as pdf:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.plot(y_test, label="True", color="black", linewidth=2)
-            for name, preds in models.items():
-                ax.plot(preds, label=name)
-            ax.set_title("📈 True vs Predicted Concentration")
-            ax.legend()
-            ax.set_ylabel("Concentration")
-            ax.set_xlabel("Test Sample Index")
-            st.pyplot(fig)
-            pdf.savefig(fig)
+    rmse_ann = mean_squared_error(y_true_ann, y_pred_ann, squared=False)
+    r2_ann = r2_score(y_true_ann, y_pred_ann)
+    results["ANN"] = {"RMSE": rmse_ann, "R2": r2_ann}
 
-        # Metrics
-        st.markdown("### 📊 Model Performance")
-        for name, preds in models.items():
-            rmse = mean_squared_error(y_test, preds) ** 0.5
-            r2 = r2_score(y_test, preds)
-            st.write(f"**{name}** — RMSE: `{rmse:.4f}`, R²: `{r2:.4f}`")
-
-        pdf_buffer.seek(0)
-        st.download_button("📥 Download Plot PDF", pdf_buffer, file_name="concentration_predictions.pdf")
+    st.markdown("## 📊 Model Performance")
+    for model, metrics in results.items():
+        st.markdown(f"**{model}** — RMSE: `{metrics['RMSE']:.5f}` , R²: `{metrics['R2']:.5f}`")
